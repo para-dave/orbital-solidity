@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.pytest_cache/
+
+# Foundry/Solidity
+cache/
+out/
+broadcast/
+*.log
+lib/
+
+# Environment variables
+.env
+.env.local
+
+# Deployment artifacts
+deployment.json
+deployments/
+
+# Node
+node_modules/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation builds
+docs/_build/
