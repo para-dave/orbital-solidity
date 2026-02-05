@@ -366,6 +366,35 @@ contract OrbitalPool {
         uint256 sumSquaresTotal;     // sum(xTotal^2)
     }
 
+    function _absDiff(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a > b ? a - b : b - a;
+    }
+
+    function _flipPinnedAtKNorm(uint256 kNorm, bool pin) internal returns (uint256 flipped) {
+        // Flip *all* ticks with k/r ~= kNorm (ties) so we don't get stuck at a crossover where
+        // the remaining boundary is at dIn=0. This matches the paper’s notion that ticks with
+        // the same normalized boundary cross simultaneously (equivalent to pooling into one tick).
+        for (uint256 tickId = 0; tickId < ticks.length; tickId++) {
+            Tick storage tick = ticks[tickId];
+            if (tick.totalShares == 0 || tick.k == 0) continue;
+
+            uint256 tickKNorm = tick.k.div(tick.r);
+            if (_absDiff(tickKNorm, kNorm) > CROSS_TOLERANCE) continue;
+
+            if (pin) {
+                if (!tick.pinned) {
+                    tick.pinned = true;
+                    flipped++;
+                }
+            } else {
+                if (tick.pinned) {
+                    tick.pinned = false;
+                    flipped++;
+                }
+            }
+        }
+    }
+
     function _swapFullTorusSegmented(
         uint256 inIdx,
         uint256 amountIn,
@@ -382,6 +411,12 @@ contract OrbitalPool {
 
             uint256 xOutBefore = state.xTotal[outIdx];
             require(xOutBefore > 0, "No output liquidity");
+
+            // Current interior normalized projection (alpha_int / r_int).
+            uint256 alphaTotalCurrent = state.sumTotal.mul(oneOverSqrtN);
+            require(alphaTotalCurrent + TOLERANCE >= state.kBoundTotal, "Invalid alpha");
+            uint256 alphaIntCurrent = alphaTotalCurrent > state.kBoundTotal ? alphaTotalCurrent - state.kBoundTotal : 0;
+            uint256 alphaIntNormCurrent = alphaIntCurrent.div(state.rInt);
 
             // Solve assuming no tick boundary crossing in this segment
             uint256 newXOut;
@@ -419,18 +454,23 @@ contract OrbitalPool {
 
             // Crossing detected: compute exact crossover segment (dIn, dOut) to boundary point.
             uint256 kCrossNorm;
-            uint256 crossTickId;
             bool outward;
             if (crossesOutward) {
                 outward = true;
                 kCrossNorm = state.kMinInteriorNorm;
-                crossTickId = state.crossInteriorId;
             } else {
                 outward = false;
                 kCrossNorm = state.kMaxBoundaryNorm;
-                crossTickId = state.crossBoundaryId;
             }
-            require(crossTickId != type(uint256).max, "Cross tick missing");
+            require(kCrossNorm != type(uint256).max && kCrossNorm != 0, "Cross k missing");
+
+            // If we are already at the crossover boundary (or extremely close), flip the tied
+            // tick(s) immediately and continue. This avoids trying to solve a dIn=0 crossover.
+            if (_absDiff(alphaIntNormCurrent, kCrossNorm) <= CROSS_TOLERANCE) {
+                uint256 flippedNow = _flipPinnedAtKNorm(kCrossNorm, outward);
+                require(flippedNow > 0, "No ticks to flip");
+                continue;
+            }
 
             (uint256 dInCross, uint256 dOutCross) = _solveCrossoverAmounts(
                 state,
@@ -451,12 +491,9 @@ contract OrbitalPool {
             totalOut += dOutCross;
             remaining -= dInCross;
 
-            // Flip pinned status for the crossing tick for subsequent segments
-            if (outward) {
-                ticks[crossTickId].pinned = true;
-            } else {
-                ticks[crossTickId].pinned = false;
-            }
+            // Flip pinned status for all tied ticks at this boundary (same k/r).
+            uint256 flipped = _flipPinnedAtKNorm(kCrossNorm, outward);
+            require(flipped > 0, "No ticks flipped");
         }
 
         require(remaining == 0, "Too many segments");
