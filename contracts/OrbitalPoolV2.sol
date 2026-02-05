@@ -14,6 +14,10 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
  *      - Torus consolidation (interior + boundary)
  *      - Multi-tick routing with global invariant
  *      - LP withdrawal
+ *
+ * The production swap path is `swap()` -> `_swapFullTorusSegmented()`, which follows the paper’s
+ * consolidated (interior/boundary) torus invariant and segmented-crossing logic. Some older internal
+ * helper functions are kept for reference/backwards-compatibility but are not used by `swap()`.
  */
 contract OrbitalPoolV2 {
     using FixedPointMath for uint256;
@@ -21,7 +25,9 @@ contract OrbitalPoolV2 {
 
     // ============ Constants ============
 
-    uint256 private constant TOLERANCE = 1e15; // 0.1% tolerance for invariants
+    // Absolute fixed-point tolerance (18 decimals). Used for invariant and boundary proximity checks.
+    // This is an absolute tolerance (e.g. 1e15 == 0.001), not a percentage of pool size.
+    uint256 private constant TOLERANCE = 1e15;
     uint256 private constant MAX_ITERATIONS = 20; // Numerical solver iterations
 
     // ============ Enums ============
@@ -49,6 +55,8 @@ contract OrbitalPoolV2 {
         uint256 totalRSquared;       // Sum of r² values
     }
 
+    // Legacy consolidation cache (kept for backwards-compatibility with older internal helpers).
+    // The production swap path is `_swapFullTorusSegmented()` which does not use this struct.
     struct ConsolidationCache {
         uint256[] tickIds;           // Ticks being consolidated
         uint256[] weights;           // Weight of each tick (r / total_r)
@@ -771,6 +779,7 @@ contract OrbitalPoolV2 {
                 int256 orth = (int256(s) * u[i]) / int256(FixedPointMath.ONE);
                 int256 reserve = int256(kPerToken) + orth;
                 require(reserve >= 0, "Neg reserve");
+                require(uint256(reserve) <= tick.r + TOLERANCE, "Reserve > r");
                 tick.reserves[i] = uint256(reserve);
             }
 
@@ -802,7 +811,9 @@ contract OrbitalPoolV2 {
             Tick storage tick = ticks[tickId];
 
             for (uint256 i = 0; i < nTokens; i++) {
-                tick.reserves[i] = xInt[i].mul(tick.r).div(state.rInt);
+                uint256 reserve = xInt[i].mul(tick.r).div(state.rInt);
+                require(reserve <= tick.r + TOLERANCE, "Interior reserve > r");
+                tick.reserves[i] = reserve;
             }
 
             require(_checkSphereInvariant(tickId), "Interior sphere violated");
@@ -820,7 +831,7 @@ contract OrbitalPoolV2 {
         return uint256(x < 0 ? -x : x);
     }
 
-    // ============ Internal Trading Functions ============
+    // ============ Internal Trading Functions (Legacy) ============
 
     /**
      * @notice Execute trade on a single tick
@@ -1555,6 +1566,9 @@ contract OrbitalPoolV2 {
 
         uint256 sumSquares = 0;
         for (uint256 i = 0; i < nTokens; i++) {
+            // With positive prices, we should never have reserves above r (paper assumption).
+            if (tick.reserves[i] > tick.r + TOLERANCE) return false;
+
             uint256 diff = tick.r > tick.reserves[i]
                 ? tick.r - tick.reserves[i]
                 : tick.reserves[i] - tick.r;
