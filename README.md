@@ -3,7 +3,7 @@
 n-dimensional sphere-based AMM for stablecoin-style assets.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-![Tests](https://img.shields.io/badge/tests-59%2F59%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-60%2F60%20passing-brightgreen)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.20-blue)](https://soliditylang.org/)
 [![Foundry](https://img.shields.io/badge/Built%20with-Foundry-blue)](https://getfoundry.sh/)
 
@@ -23,7 +23,7 @@ forge install
 forge test
 ```
 
-Expected: `59` tests passing.
+Expected: `60` tests passing.
 
 ## Deploy (example)
 
@@ -63,4 +63,3 @@ script/
 ## License
 
 MIT (see `LICENSE`).
-

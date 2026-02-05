@@ -22,7 +22,7 @@ contract OrbitalPoolV2 {
     // ============ Constants ============
 
     uint256 private constant TOLERANCE = 1e15; // 0.1% tolerance for invariants
-    uint256 private constant MAX_ITERATIONS = 20; // Newton's method iterations
+    uint256 private constant MAX_ITERATIONS = 20; // Numerical solver iterations
 
     // ============ Enums ============
 
@@ -122,10 +122,6 @@ contract OrbitalPoolV2 {
         tick.pinned = false;
         tick.reserves = new uint256[](nTokens);
         tick.totalShares = 0;
-
-        // Update global state
-        globalState.totalR += r;
-        globalState.totalRSquared += r.mul(r);
 
         emit TickCreated(tickId, r, k, tickType);
     }
@@ -358,7 +354,7 @@ contract OrbitalPoolV2 {
             if (state.boundaryIds.length == 0) {
                 newXOut = _solveSphereNewXOut(state.xTotal, state.rInt, inIdx, remaining, outIdx);
             } else {
-                newXOut = _solveTorusNewXOut(state.xTotal, state.rInt, state.kBoundTotal, state.sBoundTotal, inIdx, remaining, outIdx);
+                newXOut = _solveTorusNewXOut(state, inIdx, remaining, outIdx);
             }
 
             require(newXOut < xOutBefore, "Invalid trade");
@@ -547,38 +543,56 @@ contract OrbitalPoolV2 {
     }
 
     function _solveTorusNewXOut(
-        uint256[] memory xTotal,
-        uint256 rInt,
-        uint256 kBoundTotal,
-        uint256 sBoundTotal,
+        ConsolidatedState memory state,
         uint256 inIdx,
         uint256 amountIn,
         uint256 outIdx
     ) internal view returns (uint256 newXOut) {
-        uint256[] memory x = new uint256[](nTokens);
-        for (uint256 i = 0; i < nTokens; i++) {
-            x[i] = xTotal[i];
-        }
+        uint256 xIn0 = state.xTotal[inIdx];
+        uint256 xOut0 = state.xTotal[outIdx];
+        require(xOut0 > 0, "No output liquidity");
 
-        x[inIdx] += amountIn;
+        // Precompute the parts of (sum, sumSquares) that don't depend on the candidate xOut.
+        uint256 sumBase = state.sumTotal + amountIn;
 
-        uint256 high = xTotal[outIdx];
+        uint256 xIn1 = xIn0 + amountIn;
+        uint256 sumSquaresBase = state.sumSquaresTotal + xIn1.mul(xIn1) - xIn0.mul(xIn0);
+
         uint256 low = 0;
+        uint256 high = xOut0;
 
-        x[outIdx] = low;
-        int256 fLow = _fullTorusInvariantError(x, rInt, kBoundTotal, sBoundTotal);
-        x[outIdx] = high;
-        int256 fHigh = _fullTorusInvariantError(x, rInt, kBoundTotal, sBoundTotal);
+        int256 fLow = _fullTorusInvariantErrorFromSums(
+            sumBase - xOut0 + low,
+            sumSquaresBase - xOut0.mul(xOut0) + low.mul(low),
+            state.rInt,
+            state.kBoundTotal,
+            state.sBoundTotal
+        );
+        int256 fHigh = _fullTorusInvariantErrorFromSums(
+            sumBase,
+            sumSquaresBase,
+            state.rInt,
+            state.kBoundTotal,
+            state.sBoundTotal
+        );
 
-        require(fLow == 0 || fHigh == 0 || (fLow > 0 && fHigh < 0) || (fLow < 0 && fHigh > 0), "Unbracketed");
+        require(
+            fLow == 0 || fHigh == 0 || (fLow > 0 && fHigh < 0) || (fLow < 0 && fHigh > 0),
+            "Unbracketed"
+        );
 
         if (fHigh == 0) return high;
         if (fLow == 0) return low;
 
         for (uint256 iter = 0; iter < MAX_ITERATIONS * 4; iter++) {
             uint256 mid = (low + high) / 2;
-            x[outIdx] = mid;
-            int256 fMid = _fullTorusInvariantError(x, rInt, kBoundTotal, sBoundTotal);
+            int256 fMid = _fullTorusInvariantErrorFromSums(
+                sumBase - xOut0 + mid,
+                sumSquaresBase - xOut0.mul(xOut0) + mid.mul(mid),
+                state.rInt,
+                state.kBoundTotal,
+                state.sBoundTotal
+            );
 
             if (_absInt(fMid) < TOLERANCE) {
                 return mid;
@@ -601,19 +615,14 @@ contract OrbitalPoolV2 {
         return high;
     }
 
-    function _fullTorusInvariantError(
-        uint256[] memory xTotal,
+    function _fullTorusInvariantErrorFromSums(
+        uint256 sumTotal,
+        uint256 sumSquares,
         uint256 rInt,
         uint256 kBoundTotal,
         uint256 sBoundTotal
     ) internal view returns (int256) {
-        uint256 sumTotal = 0;
-        uint256 sumSquares = 0;
-        for (uint256 i = 0; i < nTokens; i++) {
-            sumTotal += xTotal[i];
-            sumSquares += xTotal[i].mul(xTotal[i]);
-        }
-
+        // Paper: r_int^2 = (alpha_total - k_bound_total - r_int*sqrt(n))^2 + (||w_total|| - s_bound_total)^2
         uint256 alphaTotal = sumTotal.mul(oneOverSqrtN);
         int256 parallelDiff = int256(alphaTotal) - int256(kBoundTotal) - int256(rInt.mul(sqrtN));
         uint256 parallelTerm = _absInt(parallelDiff).mul(_absInt(parallelDiff));
@@ -937,13 +946,7 @@ contract OrbitalPoolV2 {
             Tick storage tick = ticks[tickIds[i]];
             require(tick.tickType == TickType.Boundary, "Only boundary ticks");
 
-            // s = sqrt(r² - (k - r/√n)²)
-            uint256 term1 = tick.r.mul(tick.r);
-            uint256 term2 = tick.k - tick.r.mul(oneOverSqrtN);
-            uint256 term3 = term2.mul(term2);
-
-            require(term1 >= term3, "Invalid boundary tick");
-            boundaryRadii[i] = (term1 - term3).sqrt();
+            boundaryRadii[i] = _boundaryOrthogonalRadius(tick.r, tick.k);
             totalBoundaryRadius += boundaryRadii[i];
         }
 
@@ -1569,6 +1572,7 @@ contract OrbitalPoolV2 {
         // Recompute from all ticks
         for (uint256 tickId = 0; tickId < ticks.length; tickId++) {
             Tick storage tick = ticks[tickId];
+            if (tick.totalShares == 0) continue;
 
             globalState.totalR += tick.r;
             globalState.totalRSquared += tick.r.mul(tick.r);

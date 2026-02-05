@@ -375,6 +375,18 @@ contract OrbitalPoolV2Test is Test {
         assertTrue(totalReserves[0] >= amounts[0] * 2, "Total reserves should include both ticks");
     }
 
+    function testGlobalStateIgnoresEmptyTicks() public {
+        pool.createTick(10_000 * ONE, 0);
+        pool.createTick(5_000 * ONE, 0);
+
+        (uint256[] memory totalReserves, uint256 totalR, uint256 totalRSquared) = pool.getGlobalState();
+        assertEq(totalR, 0, "Empty ticks should not count toward totalR");
+        assertEq(totalRSquared, 0, "Empty ticks should not count toward totalRSquared");
+        assertEq(totalReserves[0], 0, "Empty ticks should not count toward reserves");
+        assertEq(totalReserves[1], 0, "Empty ticks should not count toward reserves");
+        assertEq(totalReserves[2], 0, "Empty ticks should not count toward reserves");
+    }
+
     function testBoundaryConstraintCheck() public {
         uint256 r = 10_000 * ONE;
         uint256 k = 8_000 * ONE;
