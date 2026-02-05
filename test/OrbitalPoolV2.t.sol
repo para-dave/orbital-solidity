@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../contracts/OrbitalPoolV2.sol";
+import "../contracts/OrbitalPool.sol";
 import "../contracts/FixedPointMath.sol";
 
 contract MockERC20 {
@@ -48,7 +48,7 @@ contract MockERC20 {
 contract OrbitalPoolV2Test is Test {
     using FixedPointMath for uint256;
 
-    OrbitalPoolV2 pool;
+    OrbitalPool pool;
     MockERC20 token0;
     MockERC20 token1;
     MockERC20 token2;
@@ -71,7 +71,7 @@ contract OrbitalPoolV2Test is Test {
         tokens[2] = address(token2);
 
         // Deploy pool with 0.3% fee
-        pool = new OrbitalPoolV2(tokens);
+        pool = new OrbitalPool(tokens);
 
         // Mint tokens to test users
         token0.mint(alice, 1_000_000 * ONE);
@@ -91,12 +91,12 @@ contract OrbitalPoolV2Test is Test {
 
         uint256 tickId = pool.createTick(r, k);
 
-        (uint256 tickR, uint256 tickK, OrbitalPoolV2.TickType tickType, , ) = pool.getTickInfo(tickId);
+        (uint256 tickR, uint256 tickK, OrbitalPool.TickType tickType, , ) = pool.getTickInfo(tickId);
 
         assertEq(tickId, 0, "First tick should have ID 0");
         assertEq(tickR, r, "Radius should match");
         assertEq(tickK, k, "K should be 0 for interior");
-        assertTrue(tickType == OrbitalPoolV2.TickType.Interior, "Should be interior tick");
+        assertTrue(tickType == OrbitalPool.TickType.Interior, "Should be interior tick");
     }
 
     function testCreateBoundaryTick() public {
@@ -105,11 +105,11 @@ contract OrbitalPoolV2Test is Test {
 
         uint256 tickId = pool.createTick(r, k);
 
-        (uint256 tickR, uint256 tickK, OrbitalPoolV2.TickType tickType, , ) = pool.getTickInfo(tickId);
+        (uint256 tickR, uint256 tickK, OrbitalPool.TickType tickType, , ) = pool.getTickInfo(tickId);
 
         assertEq(tickR, r, "Radius should match");
         assertEq(tickK, k, "K should match");
-        assertTrue(tickType == OrbitalPoolV2.TickType.Boundary, "Should be boundary tick");
+        assertTrue(tickType == OrbitalPool.TickType.Boundary, "Should be boundary tick");
     }
 
     function testAddLiquidityFirstLP() public {

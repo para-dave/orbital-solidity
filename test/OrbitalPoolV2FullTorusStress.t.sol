@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../contracts/OrbitalPoolV2.sol";
+import "../contracts/OrbitalPool.sol";
 import "../contracts/FixedPointMath.sol";
 
 contract MockERC20 {
@@ -52,7 +52,7 @@ contract OrbitalPoolV2FullTorusStressTest is Test {
     uint256 constant INV_TOL = 1e15; // must match contract tolerance
     uint256 constant PARALLEL_RTL = 1e12; // ~1e-12 relative tolerance
 
-    OrbitalPoolV2 pool;
+    OrbitalPool pool;
     MockERC20 token0;
     MockERC20 token1;
     MockERC20 token2;
@@ -71,7 +71,7 @@ contract OrbitalPoolV2FullTorusStressTest is Test {
         tokens[1] = address(token1);
         tokens[2] = address(token2);
 
-        pool = new OrbitalPoolV2(tokens);
+        pool = new OrbitalPool(tokens);
 
         token0.mint(alice, 10_000_000 * ONE);
         token1.mint(alice, 10_000_000 * ONE);

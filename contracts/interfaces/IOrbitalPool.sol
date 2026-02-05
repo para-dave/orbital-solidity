@@ -9,12 +9,23 @@ pragma solidity ^0.8.20;
 interface IOrbitalPool {
     // ============ Events ============
 
-    event TickCreated(uint256 indexed tickId, uint256 r, uint256 k);
+    enum TickType {
+        Interior,
+        Boundary
+    }
+
+    event TickCreated(uint256 indexed tickId, uint256 r, uint256 k, TickType tickType);
     event LiquidityAdded(
         uint256 indexed tickId,
         address indexed lp,
         uint256[] amounts,
         uint256 shares
+    );
+    event LiquidityRemoved(
+        uint256 indexed tickId,
+        address indexed lp,
+        uint256 shares,
+        uint256[] amounts
     );
     event Swap(
         address indexed trader,
@@ -45,6 +56,16 @@ interface IOrbitalPool {
         returns (uint256 shares);
 
     /**
+     * @notice Remove liquidity from a tick
+     * @param tickId The tick to remove liquidity from
+     * @param shares Number of shares to burn
+     * @return amounts Array of token amounts returned
+     */
+    function removeLiquidity(uint256 tickId, uint256 shares)
+        external
+        returns (uint256[] memory amounts);
+
+    /**
      * @notice Swap tokens
      * @param tokenInIdx Index of input token
      * @param amountIn Amount of input token
@@ -73,20 +94,11 @@ interface IOrbitalPool {
         returns (uint256 price);
 
     /**
-     * @notice Get reserves for a specific tick
-     * @param tickId The tick ID
-     * @return reserves Array of token reserves
-     */
-    function getTickReserves(uint256 tickId)
-        external
-        view
-        returns (uint256[] memory reserves);
-
-    /**
      * @notice Get detailed tick information
      * @param tickId The tick ID
      * @return r Radius parameter
      * @return k Boundary parameter
+     * @return tickType Tick type (interior/boundary)
      * @return totalShares Total LP shares
      * @return reserves Token reserves array
      */
@@ -96,6 +108,7 @@ interface IOrbitalPool {
         returns (
             uint256 r,
             uint256 k,
+            TickType tickType,
             uint256 totalShares,
             uint256[] memory reserves
         );
@@ -119,6 +132,18 @@ interface IOrbitalPool {
     function checkInvariant(uint256 tickId) external view returns (bool valid);
 
     /**
+     * @notice Check if a tick is on its boundary plane (dot(reserves,v) == k)
+     * @param tickId The tick ID
+     */
+    function isOnBoundary(uint256 tickId) external view returns (bool);
+
+    /**
+     * @notice Whether a tick is currently pinned to its boundary
+     * @param tickId The tick ID
+     */
+    function isPinned(uint256 tickId) external view returns (bool);
+
+    /**
      * @notice Get the number of ticks in the pool
      * @return count Number of ticks
      */
@@ -130,12 +155,10 @@ interface IOrbitalPool {
      */
     function nTokens() external view returns (uint256);
 
-    /**
-     * @notice Get global reserve for a token
-     * @param tokenIdx Token index
-     * @return reserve Total reserve amount
-     */
-    function totalReserves(uint256 tokenIdx) external view returns (uint256 reserve);
+    function getGlobalState()
+        external
+        view
+        returns (uint256[] memory totalReserves, uint256 totalR, uint256 totalRSquared);
 
     /**
      * @notice Get token address at index
@@ -155,4 +178,9 @@ interface IOrbitalPool {
      * @return value Fixed-point value
      */
     function oneMinusOneOverSqrtN() external view returns (uint256);
+
+    /**
+     * @notice Get pre-computed 1/sqrt(n)
+     */
+    function oneOverSqrtN() external view returns (uint256);
 }

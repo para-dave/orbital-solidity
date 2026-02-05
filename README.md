@@ -3,16 +3,15 @@
 n-dimensional sphere-based AMM for stablecoin-style assets.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-![Tests](https://img.shields.io/badge/tests-62%2F62%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-48%2F48%20passing-brightgreen)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.20-blue)](https://soliditylang.org/)
 [![Foundry](https://img.shields.io/badge/Built%20with-Foundry-blue)](https://getfoundry.sh/)
 
 ## What’s Here
 
-Two pool contracts:
+One pool contract:
 
-- `contracts/OrbitalPool.sol`: simplified single-tick reference implementation (good for reading/learning).
-- `contracts/OrbitalPoolV2.sol`: full implementation with multi-tick consolidation (interior/boundary/torus), routing, and LP withdrawal.
+- `contracts/OrbitalPool.sol`: full implementation with multi-tick consolidation (interior/boundary/torus), routing, and LP withdrawal.
 
 This repo intentionally ships only the Orbital Solidity code and this `README.md` (no extra status/roadmap docs).
 
@@ -23,7 +22,7 @@ forge install
 forge test
 ```
 
-Expected: `62` tests passing.
+Expected: all tests passing.
 
 ## Deploy (example)
 
@@ -42,11 +41,10 @@ forge script script/DeployOrbital.s.sol --rpc-url "$TEMPO_RPC_URL" --broadcast
 contracts/
   FixedPointMath.sol
   OrbitalPool.sol
-  OrbitalPoolV2.sol
   interfaces/IOrbitalPool.sol
+  mocks/MockERC20.sol
 test/
   FixedPointMath.t.sol
-  OrbitalPool.t.sol
   OrbitalPoolV2.t.sol
   OrbitalPoolV2Consolidation.t.sol
   OrbitalPoolV2Torus.t.sol

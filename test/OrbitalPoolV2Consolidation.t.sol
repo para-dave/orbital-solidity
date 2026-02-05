@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../contracts/OrbitalPoolV2.sol";
+import "../contracts/OrbitalPool.sol";
 import "../contracts/FixedPointMath.sol";
 
 contract MockERC20 {
@@ -48,7 +48,7 @@ contract MockERC20 {
 contract OrbitalPoolV2ConsolidationTest is Test {
     using FixedPointMath for uint256;
 
-    OrbitalPoolV2 pool;
+    OrbitalPool pool;
     MockERC20 token0;
     MockERC20 token1;
     MockERC20 token2;
@@ -72,7 +72,7 @@ contract OrbitalPoolV2ConsolidationTest is Test {
         tokens[2] = address(token2);
 
         // Deploy pool with 0.3% fee
-        pool = new OrbitalPoolV2(tokens);
+        pool = new OrbitalPool(tokens);
 
         // Mint tokens to test users
         token0.mint(alice, 1_000_000 * ONE);

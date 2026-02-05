@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
 import "../contracts/OrbitalPool.sol";
-import "../test/OrbitalPool.t.sol"; // For MockERC20
+import "../contracts/mocks/MockERC20.sol";
 
 /**
  * @title DeployOrbital
@@ -79,10 +79,11 @@ contract DeployOrbital is Script {
 
         // Verify deployment
         console.log("\nDeployment complete!");
+        (uint256[] memory totalReserves,,) = pool.getGlobalState();
         console.log("Pool reserves:");
-        console.log("  USDC:", pool.totalReserves(0));
-        console.log("  USDT:", pool.totalReserves(1));
-        console.log("  DAI:", pool.totalReserves(2));
+        console.log("  USDC:", totalReserves[0]);
+        console.log("  USDT:", totalReserves[1]);
+        console.log("  DAI:", totalReserves[2]);
 
         console.log("\nInitial price (USDT/USDC):", pool.getPrice(0, 1));
 
