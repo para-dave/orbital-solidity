@@ -3,7 +3,7 @@
 > n-dimensional sphere-based AMM for stablecoins on Tempo blockchain
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-59%2F59%20passing-brightgreen)](#)
+![Tests](https://img.shields.io/badge/tests-59%2F59%20passing-brightgreen)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.20-blue)](https://soliditylang.org/)
 [![Foundry](https://img.shields.io/badge/Built%20with-Foundry-blue)](https://getfoundry.sh/)
 
