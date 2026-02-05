@@ -72,7 +72,7 @@ contract OrbitalPoolV2TorusTest is Test {
         tokens[2] = address(token2);
 
         // Deploy pool with 0.3% fee
-        pool = new OrbitalPoolV2(tokens, 30);
+        pool = new OrbitalPoolV2(tokens);
 
         // Mint tokens to test users
         token0.mint(alice, 1_000_000 * ONE);

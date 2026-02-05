@@ -71,7 +71,7 @@ contract OrbitalPoolV2FullTorusStressTest is Test {
         tokens[1] = address(token1);
         tokens[2] = address(token2);
 
-        pool = new OrbitalPoolV2(tokens, 30);
+        pool = new OrbitalPoolV2(tokens);
 
         token0.mint(alice, 10_000_000 * ONE);
         token1.mint(alice, 10_000_000 * ONE);
@@ -248,4 +248,3 @@ contract OrbitalPoolV2FullTorusStressTest is Test {
         return uint256(x < 0 ? -x : x);
     }
 }
-

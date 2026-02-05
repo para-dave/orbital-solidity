@@ -59,7 +59,6 @@ contract OrbitalPoolV2 {
     // ============ State Variables ============
 
     uint256 public immutable nTokens;
-    uint256 public immutable feesBps;
     address[] public tokens;
 
     Tick[] private ticks;
@@ -80,12 +79,10 @@ contract OrbitalPoolV2 {
 
     // ============ Constructor ============
 
-    constructor(address[] memory _tokens, uint256 _feesBps) {
+    constructor(address[] memory _tokens) {
         require(_tokens.length >= 2, "Need at least 2 tokens");
-        require(_feesBps <= 10000, "Fee too high");
 
         nTokens = _tokens.length;
-        feesBps = _feesBps;
         tokens = _tokens;
 
         // Initialize global state
@@ -305,11 +302,7 @@ contract OrbitalPoolV2 {
         require(amountIn > 0, "Zero input");
         require(ticks.length > 0, "No liquidity");
 
-        // Apply fee
-        uint256 fee = (amountIn * feesBps) / 10000;
-        uint256 amountInAfterFee = amountIn - fee;
-
-        amountOut = _swapFullTorusSegmented(tokenInIdx, amountInAfterFee, tokenOutIdx);
+        amountOut = _swapFullTorusSegmented(tokenInIdx, amountIn, tokenOutIdx);
 
         require(amountOut >= minAmountOut, "Slippage exceeded");
 

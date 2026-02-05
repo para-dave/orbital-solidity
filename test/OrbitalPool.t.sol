@@ -81,7 +81,7 @@ contract OrbitalPoolTest is Test {
         tokens[2] = address(token2);
 
         // Deploy pool with 0.3% fee
-        pool = new OrbitalPool(tokens, 30);
+        pool = new OrbitalPool(tokens);
 
         // Mint tokens to test addresses
         token0.mint(alice, 1000000 * ONE);
@@ -95,7 +95,6 @@ contract OrbitalPoolTest is Test {
 
     function testCreatePool() public {
         assertEq(pool.nTokens(), 3);
-        assertEq(pool.feesBps(), 30);
         assertEq(pool.getTickCount(), 0);
     }
 
@@ -235,7 +234,7 @@ contract OrbitalPoolTest is Test {
         uint256 amountOut = pool.swap(0, 100 * ONE, 1, 90 * ONE);
         vm.stopPrank();
 
-        // Should get reasonable output (less than input due to fees)
+        // Should get reasonable output
         assertGt(amountOut, 90 * ONE);
         assertLt(amountOut, 100 * ONE);
 

@@ -42,14 +42,11 @@ contract DeployOrbital is Script {
         tokens[1] = address(usdt);
         tokens[2] = address(dai);
 
-        uint256 feesBps = 30; // 0.3% fee
-
-        OrbitalPool pool = new OrbitalPool(tokens, feesBps);
+        OrbitalPool pool = new OrbitalPool(tokens);
 
         console.log("Deployed OrbitalPool at:", address(pool));
         console.log("Pool configuration:");
         console.log("  Number of tokens:", pool.nTokens());
-        console.log("  Fee (bps):", pool.feesBps());
         console.log("  sqrtN:", pool.sqrtN());
 
         // Create initial tick and add liquidity

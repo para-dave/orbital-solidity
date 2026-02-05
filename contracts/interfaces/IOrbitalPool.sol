@@ -131,12 +131,6 @@ interface IOrbitalPool {
     function nTokens() external view returns (uint256);
 
     /**
-     * @notice Get the fee in basis points
-     * @return Fee in basis points (e.g., 30 = 0.3%)
-     */
-    function feesBps() external view returns (uint256);
-
-    /**
      * @notice Get global reserve for a token
      * @param tokenIdx Token index
      * @return reserve Total reserve amount

@@ -27,7 +27,6 @@ contract OrbitalPool {
     // ============ State Variables ============
 
     uint256 public immutable nTokens;
-    uint256 public immutable feesBps;           // Fee in basis points (30 = 0.3%)
     address[] public tokens;                     // Token addresses
     uint256[] public totalReserves;             // Global reserve tracking
 
@@ -56,12 +55,10 @@ contract OrbitalPool {
 
     // ============ Constructor ============
 
-    constructor(address[] memory _tokens, uint256 _feesBps) {
+    constructor(address[] memory _tokens) {
         require(_tokens.length >= 2, "Need at least 2 tokens");
-        require(_feesBps <= 10000, "Fee too high");
 
         nTokens = _tokens.length;
-        feesBps = _feesBps;
         tokens = _tokens;
 
         // Initialize global reserves
@@ -202,10 +199,6 @@ contract OrbitalPool {
         require(amountIn > 0, "Zero input");
         require(ticks.length > 0, "No liquidity");
 
-        // Apply fee
-        uint256 fee = (amountIn * feesBps) / 10000;
-        uint256 amountInAfterFee = amountIn - fee;
-
         // Find largest active tick (simplified routing)
         uint256 largestTickId = type(uint256).max;
         uint256 largestR = 0;
@@ -222,7 +215,7 @@ contract OrbitalPool {
         amountOut = _tradeSingleTick(
             largestTickId,
             tokenInIdx,
-            amountInAfterFee,
+            amountIn,
             tokenOutIdx
         );
 
