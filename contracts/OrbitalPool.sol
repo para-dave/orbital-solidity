@@ -135,15 +135,15 @@ contract OrbitalPool {
             // Proportional shares
             uint256 minRatio = type(uint256).max;
             for (uint256 i = 0; i < nTokens; i++) {
-                if (amounts[i] > 0 && tick.reserves[i] > 0) {
-                    uint256 ratio = FixedPointMath.div(amounts[i], tick.reserves[i]);
-                    if (ratio < minRatio) {
-                        minRatio = ratio;
-                    }
+                require(tick.reserves[i] > 0, "No reserves");
+                uint256 ratio = FixedPointMath.div(amounts[i], tick.reserves[i]);
+                if (ratio < minRatio) {
+                    minRatio = ratio;
                 }
             }
 
             shares = FixedPointMath.mul(tick.totalShares, minRatio);
+            require(shares > 0, "Shares must be positive");
 
             // Update reserves
             for (uint256 i = 0; i < nTokens; i++) {
@@ -206,15 +206,17 @@ contract OrbitalPool {
         uint256 fee = (amountIn * feesBps) / 10000;
         uint256 amountInAfterFee = amountIn - fee;
 
-        // Find largest tick (simplified routing)
-        uint256 largestTickId = 0;
-        uint256 largestR = ticks[0].r;
-        for (uint256 i = 1; i < ticks.length; i++) {
-            if (ticks[i].r > largestR) {
+        // Find largest active tick (simplified routing)
+        uint256 largestTickId = type(uint256).max;
+        uint256 largestR = 0;
+        for (uint256 i = 0; i < ticks.length; i++) {
+            if (ticks[i].totalShares == 0) continue;
+            if (largestTickId == type(uint256).max || ticks[i].r > largestR) {
                 largestR = ticks[i].r;
                 largestTickId = i;
             }
         }
+        require(largestTickId != type(uint256).max, "No liquidity");
 
         // Execute trade on tick
         amountOut = _tradeSingleTick(
@@ -260,15 +262,6 @@ contract OrbitalPool {
         uint256 xIn = tick.reserves[inIdx];
         uint256 xOut = tick.reserves[outIdx];
 
-        // Calculate sum of (r - x_k)^2 for all k != inIdx, outIdx
-        uint256 otherSum = 0;
-        for (uint256 k = 0; k < nTokens; k++) {
-            if (k != inIdx && k != outIdx) {
-                uint256 diff = r - tick.reserves[k];
-                otherSum += FixedPointMath.mul(diff, diff);
-            }
-        }
-
         // Direct formula: amountOut = sqrt((r-xOut)^2 - amountIn^2 + 2*(r-xIn)*amountIn) - (r-xOut)
         uint256 rMinusXIn = r - xIn;
         uint256 rMinusXOut = r - xOut;
@@ -280,8 +273,9 @@ contract OrbitalPool {
             amountIn
         );
 
-        uint256 underSqrt = term1 - term2 + term3;
-        require(underSqrt > 0, "Invalid trade: negative discriminant");
+        uint256 underSqrt = term1 + term3;
+        require(underSqrt > term2, "Invalid trade: negative discriminant");
+        underSqrt -= term2;
 
         uint256 sqrtTerm = FixedPointMath.sqrt(underSqrt);
         require(sqrtTerm > rMinusXOut, "Invalid trade: non-positive output");
@@ -370,14 +364,18 @@ contract OrbitalPool {
             return FixedPointMath.ONE;
         }
 
-        // Use largest tick
-        uint256 largestTickId = 0;
-        uint256 largestR = ticks[0].r;
-        for (uint256 i = 1; i < ticks.length; i++) {
-            if (ticks[i].r > largestR) {
+        // Use largest active tick
+        uint256 largestTickId = type(uint256).max;
+        uint256 largestR = 0;
+        for (uint256 i = 0; i < ticks.length; i++) {
+            if (ticks[i].totalShares == 0) continue;
+            if (largestTickId == type(uint256).max || ticks[i].r > largestR) {
                 largestR = ticks[i].r;
                 largestTickId = i;
             }
+        }
+        if (largestTickId == type(uint256).max) {
+            return FixedPointMath.ONE;
         }
 
         Tick storage tick = ticks[largestTickId];

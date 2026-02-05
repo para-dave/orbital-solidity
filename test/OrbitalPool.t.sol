@@ -175,6 +175,50 @@ contract OrbitalPoolTest is Test {
         assertApproxEqRel(reserves[2], 2000 * ONE, 0.01e18);
     }
 
+    function testAddLiquidityRejectsSingleSided() public {
+        // Alice adds initial liquidity
+        (uint256 tickId,) = _createPoolWithLiquidity(
+            alice,
+            1000 * ONE,
+            1000 * ONE,
+            1000 * ONE
+        );
+
+        // Bob tries to add liquidity with only one token
+        vm.startPrank(bob);
+        token0.approve(address(pool), 1000 * ONE);
+
+        uint256[] memory bobAmounts = new uint256[](3);
+        bobAmounts[0] = 1000 * ONE;
+        bobAmounts[1] = 0;
+        bobAmounts[2] = 0;
+
+        vm.expectRevert();
+        pool.addLiquidity(tickId, bobAmounts);
+        vm.stopPrank();
+    }
+
+    function testSwapIgnoresEmptyLargestTick() public {
+        // Create an empty tick with a huge r (should be ignored)
+        pool.createTick(100_000 * ONE, 0);
+
+        // Create a real tick with liquidity
+        _createPoolWithLiquidity(
+            alice,
+            10_000 * ONE,
+            10_000 * ONE,
+            10_000 * ONE
+        );
+
+        // Swap should succeed by routing to the active tick
+        vm.startPrank(bob);
+        token0.approve(address(pool), 100 * ONE);
+        uint256 amountOut = pool.swap(0, 100 * ONE, 1, 0);
+        vm.stopPrank();
+
+        assertGt(amountOut, 0);
+    }
+
     function testSwapBasic() public {
         // Create pool with liquidity
         _createPoolWithLiquidity(

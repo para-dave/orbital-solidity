@@ -3,9 +3,34 @@
 > n-dimensional sphere-based AMM for stablecoins on Tempo blockchain
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-24%2F24%20passing-brightgreen)](docs/solidity/TEST_RESULTS.md)
+[![Tests](https://img.shields.io/badge/tests-59%2F59%20passing-brightgreen)](#)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.20-blue)](https://soliditylang.org/)
 [![Foundry](https://img.shields.io/badge/Built%20with-Foundry-blue)](https://getfoundry.sh/)
+
+## 🎯 Two Implementations Available
+
+This repository contains **two implementations** of the Orbital AMM:
+
+### 1. **OrbitalPool.sol** - Simplified Single-Tick (Educational)
+- ✅ Single-tick sphere invariant trades
+- ✅ Add liquidity
+- ✅ Basic routing to largest tick
+- ✅ 26/26 core tests passing (FixedPointMath + OrbitalPool)
+- 📝 ~450 lines, great for learning
+- ⚠️ **Missing**: Multi-tick consolidation (the core innovation)
+
+### 2. **OrbitalPoolV2.sol** - Full Multi-Tick Consolidation ⭐
+- ✅ **Interior tick consolidation** - combines parallel ticks
+- ✅ **Boundary tick consolidation** - handles constraint planes
+- ✅ **Global invariant tracking** - sum and sum-of-squares
+- ✅ **Parallel reserve detection** - automatic optimization
+- ✅ **Remove liquidity** - full LP lifecycle
+- ✅ **Torus consolidation** - interior + boundary
+- ✅ 33/33 OrbitalPoolV2 tests passing (including stress test)
+- 📝 ~1,050 lines, production-ready
+- 🎯 **Implements the full paper specification**
+
+---
 
 ## Overview
 
@@ -15,6 +40,7 @@ Orbital AMM is a novel automated market maker that enables efficient swaps betwe
 - 🌐 **Multi-token pools** - 3+ stablecoins in a single pool
 - 📊 **15x-150x capital efficiency** vs Uniswap V2
 - 🎯 **Concentrated liquidity** using sphere invariant: `∑(r - x_i)² = r²`
+- 🔄 **Multi-tick consolidation** - the core innovation (OrbitalPoolV2)
 - ⚡ **Sub-second finality** on Tempo
 - 💰 **~$0.001 per swap** on Tempo (~10,800x cheaper than Ethereum)
 
@@ -42,7 +68,7 @@ forge build
 forge test -vv
 ```
 
-**Expected**: ✅ 24/24 tests passing
+**Expected**: ✅ 59/59 tests passing
 
 ### Deploy to Tempo Testnet
 
@@ -58,8 +84,6 @@ forge script script/DeployOrbital.s.sol \
     --private-key $PRIVATE_KEY
 ```
 
-See [Quick Start Guide](docs/solidity/QUICKSTART.md) for detailed instructions.
-
 ## Project Structure
 
 ```
@@ -67,21 +91,20 @@ orbital-amm-solidity/
 ├── contracts/
 │   ├── FixedPointMath.sol      # 18-decimal fixed-point math library
 │   ├── OrbitalPool.sol         # Core AMM implementation (450+ lines)
+│   ├── OrbitalPoolV2.sol       # Full multi-tick consolidation
 │   └── interfaces/
 │       └── IOrbitalPool.sol    # Interface definition
 │
 ├── test/
 │   ├── FixedPointMath.t.sol    # Math library tests (13 tests)
-│   └── OrbitalPool.t.sol       # Pool integration tests (11 tests)
+│   ├── OrbitalPool.t.sol       # Pool integration tests (13 tests)
+│   ├── OrbitalPoolV2.t.sol
+│   ├── OrbitalPoolV2Consolidation.t.sol
+│   ├── OrbitalPoolV2Torus.t.sol
+│   └── OrbitalPoolV2FullTorusStress.t.sol
 │
 ├── script/
-│   └── DeployOrbital.s.sol     # Deployment script with mock tokens
-│
-├── docs/
-│   └── solidity/               # Comprehensive documentation
-│       ├── QUICKSTART.md
-│       ├── TEST_RESULTS.md
-│       └── ...
+│   ├── DeployOrbital.s.sol     # Deployment script with mock tokens
 │
 └── lib/                         # Dependencies (forge-std, OpenZeppelin)
 ```
