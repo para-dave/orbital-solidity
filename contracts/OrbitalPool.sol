@@ -110,6 +110,7 @@ contract OrbitalPool {
         require(amounts.length == nTokens, "Wrong amounts length");
 
         Tick storage tick = ticks[tickId];
+        uint256[] memory usedAmounts = new uint256[](nTokens);
 
         if (tick.totalShares == 0) {
             // First LP: geometric mean
@@ -127,9 +128,10 @@ contract OrbitalPool {
             // Set initial reserves
             for (uint256 i = 0; i < nTokens; i++) {
                 tick.reserves[i] = amounts[i];
+                usedAmounts[i] = amounts[i];
             }
         } else {
-            // Proportional shares
+            // Proportional shares: scale the entire tick (reserves, r) by a single factor.
             uint256 minRatio = type(uint256).max;
             for (uint256 i = 0; i < nTokens; i++) {
                 require(tick.reserves[i] > 0, "No reserves");
@@ -142,16 +144,19 @@ contract OrbitalPool {
             shares = FixedPointMath.mul(tick.totalShares, minRatio);
             require(shares > 0, "Shares must be positive");
 
-            // Update reserves
+            uint256 scaleFactor = FixedPointMath.ONE + minRatio;
+
+            // Update reserves (scaled) and compute exact amounts required
             for (uint256 i = 0; i < nTokens; i++) {
-                tick.reserves[i] += amounts[i];
+                uint256 oldReserve = tick.reserves[i];
+                uint256 newReserve = FixedPointMath.mul(oldReserve, scaleFactor);
+                usedAmounts[i] = newReserve - oldReserve;
+                require(amounts[i] >= usedAmounts[i], "Insufficient proportional deposit");
+                tick.reserves[i] = newReserve;
             }
 
             // Scale r
-            tick.r = FixedPointMath.mul(
-                tick.r,
-                FixedPointMath.ONE + minRatio
-            );
+            tick.r = FixedPointMath.mul(tick.r, scaleFactor);
         }
 
         // Update shares
@@ -160,21 +165,21 @@ contract OrbitalPool {
 
         // Update global reserves
         for (uint256 i = 0; i < nTokens; i++) {
-            totalReserves[i] += amounts[i];
+            totalReserves[i] += usedAmounts[i];
         }
 
         // Transfer tokens from user
         for (uint256 i = 0; i < nTokens; i++) {
-            if (amounts[i] > 0) {
+            if (usedAmounts[i] > 0) {
                 IERC20(tokens[i]).safeTransferFrom(
                     msg.sender,
                     address(this),
-                    amounts[i]
+                    usedAmounts[i]
                 );
             }
         }
 
-        emit LiquidityAdded(tickId, msg.sender, amounts, shares);
+        emit LiquidityAdded(tickId, msg.sender, usedAmounts, shares);
     }
 
     // ============ Swap ============
@@ -254,6 +259,7 @@ contract OrbitalPool {
         uint256 r = tick.r;
         uint256 xIn = tick.reserves[inIdx];
         uint256 xOut = tick.reserves[outIdx];
+        require(xIn <= r && xOut <= r, "Out of range");
 
         // Direct formula: amountOut = sqrt((r-xOut)^2 - amountIn^2 + 2*(r-xIn)*amountIn) - (r-xOut)
         uint256 rMinusXIn = r - xIn;
@@ -291,7 +297,9 @@ contract OrbitalPool {
 
         uint256 sumSquares = 0;
         for (uint256 i = 0; i < nTokens; i++) {
-            uint256 diff = tick.r - tick.reserves[i];
+            uint256 diff = tick.r > tick.reserves[i]
+                ? tick.r - tick.reserves[i]
+                : tick.reserves[i] - tick.r;
             sumSquares += FixedPointMath.mul(diff, diff);
         }
 

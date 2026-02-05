@@ -182,6 +182,55 @@ contract OrbitalPoolV2Test is Test {
         assertTrue(delta < ONE / 1000, "Ratio should be approximately 0.5");
     }
 
+    function testAddLiquidityIgnoresExcessAmounts() public {
+        uint256 tickId = pool.createTick(10_000 * ONE, 0);
+
+        // Alice adds first
+        vm.startPrank(alice);
+        uint256[] memory amounts1 = new uint256[](3);
+        amounts1[0] = 10_000 * ONE;
+        amounts1[1] = 10_000 * ONE;
+        amounts1[2] = 10_000 * ONE;
+
+        token0.approve(address(pool), amounts1[0]);
+        token1.approve(address(pool), amounts1[1]);
+        token2.approve(address(pool), amounts1[2]);
+        pool.addLiquidity(tickId, amounts1);
+        vm.stopPrank();
+
+        // Bob provides an "excess" amount of token0; pool should only pull proportional amounts.
+        vm.startPrank(bob);
+        uint256[] memory maxAmounts = new uint256[](3);
+        maxAmounts[0] = 6_000 * ONE;
+        maxAmounts[1] = 5_000 * ONE;
+        maxAmounts[2] = 5_000 * ONE;
+
+        uint256 b0Before = token0.balanceOf(bob);
+        uint256 b1Before = token1.balanceOf(bob);
+        uint256 b2Before = token2.balanceOf(bob);
+
+        token0.approve(address(pool), maxAmounts[0]);
+        token1.approve(address(pool), maxAmounts[1]);
+        token2.approve(address(pool), maxAmounts[2]);
+
+        pool.addLiquidity(tickId, maxAmounts);
+        vm.stopPrank();
+
+        uint256 b0After = token0.balanceOf(bob);
+        uint256 b1After = token1.balanceOf(bob);
+        uint256 b2After = token2.balanceOf(bob);
+
+        // min ratio is 0.5, so expected pulled is 5k of each token (not 6k of token0).
+        assertEq(b0Before - b0After, 5_000 * ONE, "Pulled token0 should be proportional");
+        assertEq(b1Before - b1After, 5_000 * ONE, "Pulled token1 should be proportional");
+        assertEq(b2Before - b2After, 5_000 * ONE, "Pulled token2 should be proportional");
+
+        (, , , , uint256[] memory reserves) = pool.getTickInfo(tickId);
+        assertEq(reserves[0], 15_000 * ONE, "Reserves scale by 1.5x");
+        assertEq(reserves[1], 15_000 * ONE, "Reserves scale by 1.5x");
+        assertEq(reserves[2], 15_000 * ONE, "Reserves scale by 1.5x");
+    }
+
     function testAddLiquidityRejectsSingleSided() public {
         uint256 tickId = pool.createTick(10_000 * ONE, 0);
 

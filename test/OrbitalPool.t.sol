@@ -174,6 +174,48 @@ contract OrbitalPoolTest is Test {
         assertApproxEqRel(reserves[2], 2000 * ONE, 0.01e18);
     }
 
+    function testAddLiquidityIgnoresExcessAmounts() public {
+        // Alice adds initial liquidity
+        (uint256 tickId,) = _createPoolWithLiquidity(
+            alice,
+            1000 * ONE,
+            1000 * ONE,
+            1000 * ONE
+        );
+
+        // Bob provides an "excess" amount of token0; pool should only pull proportional amounts.
+        vm.startPrank(bob);
+        uint256[] memory maxAmounts = new uint256[](3);
+        maxAmounts[0] = 600 * ONE;
+        maxAmounts[1] = 500 * ONE;
+        maxAmounts[2] = 500 * ONE;
+
+        uint256 b0Before = token0.balanceOf(bob);
+        uint256 b1Before = token1.balanceOf(bob);
+        uint256 b2Before = token2.balanceOf(bob);
+
+        token0.approve(address(pool), maxAmounts[0]);
+        token1.approve(address(pool), maxAmounts[1]);
+        token2.approve(address(pool), maxAmounts[2]);
+
+        pool.addLiquidity(tickId, maxAmounts);
+        vm.stopPrank();
+
+        uint256 b0After = token0.balanceOf(bob);
+        uint256 b1After = token1.balanceOf(bob);
+        uint256 b2After = token2.balanceOf(bob);
+
+        // min ratio is 0.5, so expected pulled is 500 of each token (not 600 of token0).
+        assertEq(b0Before - b0After, 500 * ONE, "Pulled token0 should be proportional");
+        assertEq(b1Before - b1After, 500 * ONE, "Pulled token1 should be proportional");
+        assertEq(b2Before - b2After, 500 * ONE, "Pulled token2 should be proportional");
+
+        (,,, uint256[] memory reserves) = pool.getTickInfo(tickId);
+        assertApproxEqRel(reserves[0], 1500 * ONE, 0.0001e18);
+        assertApproxEqRel(reserves[1], 1500 * ONE, 0.0001e18);
+        assertApproxEqRel(reserves[2], 1500 * ONE, 0.0001e18);
+    }
+
     function testAddLiquidityRejectsSingleSided() public {
         // Alice adds initial liquidity
         (uint256 tickId,) = _createPoolWithLiquidity(

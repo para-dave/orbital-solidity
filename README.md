@@ -58,6 +58,7 @@ script/
 ## Notes
 
 - If you see an `etherscan config not found` warning during tests, it’s harmless unless you’re verifying on a block explorer.
+- `addLiquidity()` after the first LP is proportional: it scales a tick by a single factor and only pulls the proportional amounts (any per-token “excess” in the `amounts` array is ignored/not transferred).
 - Do not deploy to mainnet without a professional audit.
 
 ## License

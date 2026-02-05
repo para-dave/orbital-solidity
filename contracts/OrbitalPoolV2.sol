@@ -142,6 +142,7 @@ contract OrbitalPoolV2 {
         require(amounts.length == nTokens, "Wrong amounts length");
 
         Tick storage tick = ticks[tickId];
+        uint256[] memory usedAmounts = new uint256[](nTokens);
 
         if (tick.totalShares == 0) {
             // First LP: geometric mean
@@ -168,6 +169,7 @@ contract OrbitalPoolV2 {
             // Set initial reserves
             for (uint256 i = 0; i < nTokens; i++) {
                 tick.reserves[i] = amounts[i];
+                usedAmounts[i] = amounts[i];
             }
 
             // Initialize pinned state based on whether we are exactly on the boundary.
@@ -183,7 +185,11 @@ contract OrbitalPoolV2 {
 
             require(_checkSphereInvariant(tickId), "Invalid initial state");
         } else {
-            // Proportional shares
+            // Proportional shares: scale the entire tick (reserves, r, k) by a single factor.
+            // This preserves:
+            // - Sphere invariant
+            // - No-arbitrage direction (center - reserves)
+            // and prevents value extraction via unbalanced deposits.
             uint256 minRatio = type(uint256).max;
             for (uint256 i = 0; i < nTokens; i++) {
                 require(tick.reserves[i] > 0, "No reserves");
@@ -196,16 +202,33 @@ contract OrbitalPoolV2 {
             shares = tick.totalShares.mul(minRatio);
             require(shares > 0, "Shares must be positive");
 
-            // Update reserves
+            uint256 scaleFactor = FixedPointMath.ONE + minRatio;
+
+            // Update reserves (scaled) and compute exact amounts required
             for (uint256 i = 0; i < nTokens; i++) {
-                tick.reserves[i] += amounts[i];
+                uint256 oldReserve = tick.reserves[i];
+                uint256 newReserve = oldReserve.mul(scaleFactor);
+                usedAmounts[i] = newReserve - oldReserve;
+                require(amounts[i] >= usedAmounts[i], "Insufficient proportional deposit");
+                tick.reserves[i] = newReserve;
             }
 
-            // Scale r
-            uint256 scaleFactor = FixedPointMath.ONE + minRatio;
             tick.r = tick.r.mul(scaleFactor);
             if (tick.k > 0) {
                 tick.k = tick.k.mul(scaleFactor);
+            }
+
+            // Maintain constraints after scaling.
+            require(_checkSphereInvariant(tickId), "Invalid liquidity add");
+            if (tick.k > 0) {
+                uint256 dotProduct = 0;
+                for (uint256 i = 0; i < nTokens; i++) {
+                    dotProduct += tick.reserves[i].mul(oneOverSqrtN);
+                }
+                require(dotProduct <= tick.k + TOLERANCE, "Outside tick after add");
+                if (tick.pinned) {
+                    require(isOnBoundary(tickId), "Pinned must satisfy plane");
+                }
             }
         }
 
@@ -218,12 +241,12 @@ contract OrbitalPoolV2 {
 
         // Transfer tokens
         for (uint256 i = 0; i < nTokens; i++) {
-            if (amounts[i] > 0) {
-                IERC20(tokens[i]).safeTransferFrom(msg.sender, address(this), amounts[i]);
+            if (usedAmounts[i] > 0) {
+                IERC20(tokens[i]).safeTransferFrom(msg.sender, address(this), usedAmounts[i]);
             }
         }
 
-        emit LiquidityAdded(tickId, msg.sender, amounts, shares);
+        emit LiquidityAdded(tickId, msg.sender, usedAmounts, shares);
     }
 
     // ============ Remove Liquidity ============
@@ -247,9 +270,12 @@ contract OrbitalPoolV2 {
         uint256 proportion = shares.div(tick.totalShares);
         amounts = new uint256[](nTokens);
 
+        uint256 scaleFactor = FixedPointMath.ONE - proportion;
         for (uint256 i = 0; i < nTokens; i++) {
-            amounts[i] = tick.reserves[i].mul(proportion);
-            tick.reserves[i] -= amounts[i];
+            uint256 oldReserve = tick.reserves[i];
+            uint256 newReserve = oldReserve.mul(scaleFactor);
+            amounts[i] = oldReserve - newReserve;
+            tick.reserves[i] = newReserve;
         }
 
         // Update shares
@@ -257,10 +283,21 @@ contract OrbitalPoolV2 {
         tick.lpShares[msg.sender] -= shares;
 
         // Scale r down proportionally
-        uint256 scaleFactor = FixedPointMath.ONE - proportion;
         tick.r = tick.r.mul(scaleFactor);
         if (tick.k > 0) {
             tick.k = tick.k.mul(scaleFactor);
+        }
+
+        require(_checkSphereInvariant(tickId), "Invalid liquidity remove");
+        if (tick.k > 0) {
+            uint256 dotProduct = 0;
+            for (uint256 i = 0; i < nTokens; i++) {
+                dotProduct += tick.reserves[i].mul(oneOverSqrtN);
+            }
+            require(dotProduct <= tick.k + TOLERANCE, "Outside tick after remove");
+            if (tick.pinned) {
+                require(isOnBoundary(tickId), "Pinned must satisfy plane");
+            }
         }
 
         // Update global state
@@ -523,8 +560,8 @@ contract OrbitalPoolV2 {
         uint256 xIn = xTotal[inIdx];
         uint256 xOut = xTotal[outIdx];
 
-        require(xIn < r, "Bad sphere xIn");
-        require(xOut < r, "Bad sphere xOut");
+        require(xIn <= r, "Bad sphere xIn");
+        require(xOut <= r, "Bad sphere xOut");
 
         uint256 rMinusXIn = r - xIn;
         uint256 rMinusXOut = r - xOut;
@@ -799,6 +836,7 @@ contract OrbitalPoolV2 {
         uint256 r = tick.r;
         uint256 xIn = tick.reserves[inIdx];
         uint256 xOut = tick.reserves[outIdx];
+        require(xIn <= r && xOut <= r, "Out of range");
 
         // Quadratic formula for sphere invariant
         uint256 rMinusXIn = r - xIn;
@@ -1517,7 +1555,9 @@ contract OrbitalPoolV2 {
 
         uint256 sumSquares = 0;
         for (uint256 i = 0; i < nTokens; i++) {
-            uint256 diff = tick.r - tick.reserves[i];
+            uint256 diff = tick.r > tick.reserves[i]
+                ? tick.r - tick.reserves[i]
+                : tick.reserves[i] - tick.r;
             sumSquares += diff.mul(diff);
         }
 
