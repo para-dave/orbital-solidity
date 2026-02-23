@@ -56,26 +56,23 @@ So “boundary vs interior” in the paper’s consolidation sense is *not* the 
 
 ---
 
-## 1) Why initial LP shares are the geometric mean
+## 1) Why LP shares are proportional to `r`
 
-For a tick’s first LP, the contract mints:
+The paper’s interior tick consolidation result (Tick Consolidation, Case 1) shows that when two ticks are locally interior and therefore arbitrage-aligned, their liquidity scales add:
 
-- `shares = geometricMean(amounts)` (see `_geometricMean`)
+`r_c = r_a + r_b`.
 
-Shares are bookkeeping for proportional ownership and withdrawals; they do *not* directly determine price. For the first LP there is no prior share price, so many monotone choices could work.
+That makes `r` the natural additive liquidity unit. If we ever “combine” two ticks into one (as the paper does for trade calculations), then defining shares in units of `r` makes ownership additive too:
 
-The geometric mean is a good default because it has three “fairness” properties that match common AMM practice (it’s the n-asset generalization of Uniswap v2’s `sqrt(x*y)`):
+- tick A has `totalShares = r_a`
+- tick B has `totalShares = r_b`
+- combined tick has `totalShares = r_a + r_b`
 
-1. **Scale linearity**  
-   If all deposits scale by `s`, then:
-   `GM(s·a1,…,s·an) = s·GM(a1,…,aN)`  
-   So “double the deposit ⇒ double the shares”.
+This preserves proportional ownership whether you view them separately or as one consolidated tick.
 
-2. **Permutation symmetry**  
-   Treats all tokens identically (no token is special).
+So, for a tick’s first LP, the contract mints:
 
-3. **Zero/imbalance sensitivity**  
-   If any amount is 0, the product is 0 and the GM is 0; that aligns with the idea that you didn’t provide a full n-asset position.
+- `shares = r` (after setting `r` from the initialization deposit).
 
 ---
 
@@ -96,7 +93,7 @@ It sets `pinned = false` initially; pinning is a *runtime* state that changes vi
 
 The first LP path does five important things:
 
-1. **Mint shares** using the geometric mean.
+1. **Mint shares** in units of `r` (the paper’s additive interior-liquidity parameter).
 2. **Set `r` from the deposit average**:
    - In the paper, the equal-price point has coordinates  
      `q_i = r(1 - 1/sqrt(n))`.
@@ -128,6 +125,7 @@ Why this restriction exists:
 
 - It prevents value extraction via unbalanced deposits (classic AMM issue).
 - It preserves the tick’s shape/invariants by construction (sphere equation is homogeneous under uniform scaling).
+- With the initial-share rule above (`totalShares == r`), this also makes `shares` equal to `Δr` for each proportional add.
 
 ---
 
@@ -282,4 +280,3 @@ This preserves:
 - `getGlobalState()` recomputes totals from ticks (diagnostic convenience).
 
 `getPrice()` uses the “largest tick” and the sphere gradient formula `p = (r - xB)/(r - xA)`. In a multi-tick consolidated system, “the” price is really defined by the consolidated global state; this function is mainly for UI/testing convenience.
-

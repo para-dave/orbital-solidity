@@ -133,8 +133,9 @@ contract OrbitalPoolV2Test is Test {
         assertTrue(shares > 0, "Should receive shares");
         assertEq(pool.getLPShares(tickId, alice), shares, "Shares should be tracked");
 
-        (, , , uint256 totalShares, uint256[] memory reserves) = pool.getTickInfo(tickId);
-        assertEq(totalShares, shares, "Total shares should match");
+        (uint256 tickR, , , uint256 totalShares, uint256[] memory reserves) = pool.getTickInfo(tickId);
+        assertEq(shares, tickR, "Initial shares should equal r");
+        assertEq(totalShares, tickR, "Total shares should equal r");
         assertEq(reserves[0], amounts[0], "Reserve 0 should match");
         assertEq(reserves[1], amounts[1], "Reserve 1 should match");
         assertEq(reserves[2], amounts[2], "Reserve 2 should match");
@@ -173,6 +174,9 @@ contract OrbitalPoolV2Test is Test {
 
         assertTrue(sharesBob > 0, "Bob should receive shares");
         assertTrue(sharesBob < sharesAlice, "Bob should receive fewer shares (proportional)");
+
+        (uint256 tickR, , , uint256 totalShares, ) = pool.getTickInfo(tickId);
+        assertEq(totalShares, tickR, "Total shares should equal r");
 
         uint256 expectedRatio = amounts2[0].div(amounts1[0]);
         uint256 actualRatio = sharesBob.div(sharesAlice);

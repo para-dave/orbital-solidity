@@ -142,11 +142,11 @@ contract OrbitalPool {
         uint256[] memory usedAmounts = new uint256[](nTokens);
 
         if (tick.totalShares == 0) {
-            // First LP: geometric mean
-            shares = _geometricMean(amounts);
-            require(shares > 0, "Initial shares must be positive");
-
-            // Set r from deposit
+            // First LP: mint shares proportional to r.
+            // Paper: when two ticks are locally interior, their effective radii add (r_c = r_a + r_b),
+            // so r is the natural additive “liquidity scale” and therefore the right share unit.
+            //
+            // Set r from deposit (equal-price initialization).
             uint256 oldR = tick.r;
             uint256 sum = 0;
             for (uint256 i = 0; i < nTokens; i++) {
@@ -156,6 +156,9 @@ contract OrbitalPool {
             uint256 avg = sum / nTokens;
             uint256 newR = avg.div(oneMinusOneOverSqrtN);
             tick.r = newR;
+
+            shares = newR;
+            require(shares > 0, "Initial shares must be positive");
 
             // Keep k/r invariant (k_norm) constant as r is updated.
             if (tick.k > 0) {
@@ -949,36 +952,6 @@ contract OrbitalPool {
                 globalState.totalReserves[i] += tick.reserves[i];
             }
         }
-    }
-
-    /**
-     * @notice Geometric mean for initial shares
-     */
-    function _geometricMean(uint256[] calldata values) internal view returns (uint256) {
-        uint256 product = FixedPointMath.ONE;
-        for (uint256 i = 0; i < values.length; i++) {
-            product = product.mul(values[i]);
-        }
-
-        // Newton's method for nth root
-        uint256 sum = 0;
-        for (uint256 i = 0; i < values.length; i++) {
-            sum += values[i];
-        }
-        uint256 x = sum / nTokens;
-
-        for (uint256 iter = 0; iter < 10; iter++) {
-            uint256 xPowNMinus1 = FixedPointMath.ONE;
-            for (uint256 j = 0; j < nTokens - 1; j++) {
-                xPowNMinus1 = xPowNMinus1.mul(x);
-            }
-
-            uint256 numerator = ((nTokens - 1) * FixedPointMath.ONE).mul(x)
-                + product.div(xPowNMinus1);
-            x = numerator / nTokens;
-        }
-
-        return x;
     }
 
     // ============ View Functions ============
